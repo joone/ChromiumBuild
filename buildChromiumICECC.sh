@@ -8,13 +8,13 @@ then
 fi
 
 export CCACHE_PREFIX=icecc
-export CCACHE_BASEDIR=$HOME/chromium
+export CCACHE_BASEDIR=$HOME/git/cr-wl
 export CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox
 export ICECC_CLANG_REMOTE_CPP=1
 
 # Please set your path to ICECC_VERSION and CHROMIUM_SRC.
-export ICECC_VERSION=$HOME/chromium/clang.tar.gz
-export CHROMIUM_SRC=$HOME/chromium/src
+export ICECC_VERSION=$HOME/git/cr-wl/clang.tar.gz
+export CHROMIUM_SRC=$HOME/git/cr-wl/src
 
 export PATH=/usr/lib/ccache:/usr/lib/icecc/bin:$PATH
 export PATH=$CHROMIUM_SRC/third_party/llvm-build/Release+Asserts/bin:$PATH
@@ -36,7 +36,7 @@ then
     mkdir $TMP_CLANG_DIR
   fi
   cd tmp-clang
-  /usr/lib/icecc/icecc-create-env --clang $CHROMIUM_SRC/third_party/llvm-build/Release+Asserts/bin/clang /usr/lib/icecc/compilerwrapper
+  /usr/local/bin/icecc-create-env --clang $CHROMIUM_SRC/third_party/llvm-build/Release+Asserts/bin/clang /usr/local/libexec/icecc/compilerwrapper
   mv *.tar.gz $ICECC_VERSION
   cd ..
   rm -rf $TMP_CLANG_DIR
@@ -57,13 +57,34 @@ echo "[$timestamp] 1. Configuration"
 # Start building Chromium using the gn configuration.
 if [ "$1" == Debug ];
 then
+  export GN_DEFINES=$GN_DEFINES' use_ozone=true enable_mus=true use_xkbcommon=true'
   export GN_DEFINES=$GN_DEFINES' dcheck_always_on=true'
   echo "GN_DEFINES: "$GN_DEFINES
   gn gen out/Debug "--args=is_debug=true $GN_DEFINES"
 elif [ "$1" == Release ];
 then
+  export GN_DEFINES=$GN_DEFINES' use_ozone=true enable_mus=true use_xkbcommon=true'
   echo "GN_DEFINES: "$GN_DEFINES
   gn gen out/Release "--args=is_debug=false $GN_DEFINES"
+elif [ "$1" == vulkan ];
+then
+  export GN_DEFINES=$GN_DEFINES' enable_vulkan=true'
+  echo "GN_DEFINES: "$GN_DEFINES
+  gn gen out/vulkan "--args=is_debug=true $GN_DEFINES"
+elif [ "$1" == gbm_cros ];
+then
+  export GN_DEFINES=$GN_DEFINES' target_os="chromeos" internal_window_mode=true'
+  echo "GN_DEFINES: "$GN_DEFINES
+  gn gen out/gbm_cros "--args=is_debug=false $GN_DEFINES"
+elif [ "$1" == gbm_rel ];
+then
+  export GN_DEFINES=$GN_DEFINES' clang_use_chrome_plugins=false cc_wrapper="ccache"'
+  export GN_DEFINES=$GN_DEFINES' use_ozone=true ozone_platform_gbm=true ozone_platform_x11=false ozone_platform_wayland=false ozone_auto_platforms=false use_cups=false'
+  export GN_DEFINES=$GN_DEFINES' use_gnome_keyring=false use_pulseaudio=false use_sysroot=true'
+  export GN_DEFINES=$GN_DEFINES' use_gio=false remove_webcore_debug_symbols=true enable_native_notifications=false'
+  export GN_DEFINES=$GN_DEFINES' use_intel_minigbm = true'
+  echo "GN_DEFINES: "$GN_DEFINES
+  DRV_I915=1 gn gen out/gbm_rel "--args=$GN_DEFINES"
 else
   echo "Undefined Debug or Release."
   exit 0
@@ -72,7 +93,7 @@ echo ""
 
 start_timestamp=$(date +"%T")
 echo "[$start_timestamp] 2. Start compiling Chromium on $1 mode"
-ninja -j 100 -C out/"$1" chrome $2
+ninja -j 100 -C out/"$1" $2
 end_timestamp=$(date +"%T")
 echo ""
 echo "[$end_timestamp] 3. Finish to compile Chromium."
